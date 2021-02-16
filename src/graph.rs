@@ -19,17 +19,19 @@ pub struct Point {
     y: i32
 }
 
-pub struct Path {
-    nodes: Vec<u32>,
+pub struct Path<'a> {
+    graph: &'a Graph,
+    start: Option<u32>,
+    end: Option<u32>,
     length: f64
 }
 
 impl Graph {
-    pub fn new() -> Graph {
+    pub fn _new() -> Graph {
         Graph { nodes: Vec::new() }
     }
 
-    pub fn solve_all(&self) -> Result<Path, String> {
+    pub fn solve_all<'a>(&'a self) -> Result<Path<'a>, String> {
         match self.nodes.len() {
             0 => Err(String::from("Graph has no nodes")),
             1 => Err(String::from("Graph only has one node")),
@@ -37,7 +39,11 @@ impl Graph {
         }
     }
 
-    pub fn solve_given(&self, start: u32, end: u32) -> Result<Path, String> {
+    pub fn solve_given<'a>(&'a self, start: u32, end: u32) -> Result<Path<'a>, String> {
+        if start == end {
+            return Err(String::from("Start node cannot be the same as end node"));
+        }
+
         match self.nodes.len() {
             0 => Err(String::from("Graph has no nodes")),
             1 => Err(String::from("Graph only has one node")),
@@ -51,7 +57,7 @@ impl Graph {
         }
     }
 
-    fn bare_solve(&self, start: u32, end: u32) -> Result<Path, String> {
+    fn bare_solve<'a>(&'a self, _start: u32, _end: u32) -> Result<Path<'a>, String> {
         Ok(Path::new())
     }
 }
@@ -107,21 +113,33 @@ impl PartialOrd for GraphNode {
     }
 }
 
-impl Path {
-    pub fn new() -> Path {
+impl<'a> Path<'a> {
+    pub fn new() -> Path<'a> {
         Path { 
-            nodes: Vec::new(), 
+            start: None,
+            end: None,
             length: 0.0
         }
     }
 
-    pub fn add_node(&mut self, node: &GraphNode) {
-        if self.nodes.len() > 0 {
-            assert!(self.nodes.last().unwrap().children.iter().any(|child_id| *child_id == node.id));
-            assert!(node.children.iter().any(|child_id| *child_id == node.id));
+    pub fn get_node(& self, id: u32) -> & GraphNode {
+        assert_ne!(id, 0);
+        &self.graph.nodes[(id - 1) as usize]
+    }
+
+    pub fn add_node(&'a mut self, node: &'a GraphNode) {
+        if self.end != None {
+            let end_node = self.get_graph(self.end.unwrap());
+
+            assert!(end_node.children.iter().all(|child_id| *child_id != node.id));
+            assert!(node.children.iter().all(|child_id| *child_id != end_node.id));
         }
 
-        self.nodes.push(*node);
+        if self.start == None {
+            self.start = Some(node.id);
+        }
+
+        self.end = Some(node.id);
     }
 }
 
@@ -166,9 +184,6 @@ mod tests {
         path.add_node(&nodes[3]);
         path.add_node(&nodes[2]);
 
-        assert_eq!(path.nodes[0], nodes[0]);
-        assert_eq!(path.nodes[1], nodes[1]);
-        assert_eq!(path.nodes[2], nodes[3]);
-        assert_eq!(path.nodes[3], nodes[2]);
+        // assert
     }
 }
