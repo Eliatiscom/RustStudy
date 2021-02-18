@@ -26,11 +26,12 @@ fn main() -> Result<(), i32> {
     println!("Filename: {}", filename);
 
     if let Some(graph) = get_graph(filename) {
-        if let Ok(path) = graph.solve_all() {
-            println!("Path found");
-        } else {
-            println!("Path not found");
-        }
+        println!("Parsed graph: {:#?}", graph);
+        // if let Ok(path) = graph.solve_all() {
+        //     println!("Path found");
+        // } else {
+        //     println!("Path not found");
+        // }
     }
 
     Ok(())

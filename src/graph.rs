@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::cmp::{Ordering};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Graph {
     nodes: Vec<GraphNode>
 }
@@ -20,45 +20,57 @@ pub struct Point {
 }
 
 pub struct Path<'a> {
-    graph: &'a Graph,
-    start: Option<u32>,
-    end: Option<u32>,
-    length: f64
+    graph: Graph,
+    nodes: Vec<&'a GraphNode>
+}
+
+pub enum SolveStatus<'a> {
+    Solved(Path<'a>),
+    Unsolved(Graph, &'static str)
 }
 
 impl Graph {
-    pub fn _new() -> Graph {
-        Graph { nodes: Vec::new() }
+    pub fn with_nodes(nodes: Vec<GraphNode>) -> Graph {
+        Graph { nodes }
     }
 
-    pub fn solve_all<'a>(&'a self) -> Result<Path<'a>, String> {
+    pub fn get_node(&self, id: u32) -> Option<&GraphNode> {
+        assert_ne!(id, 0);
+        self.nodes.iter().find(|node| node.id == id)
+    }
+
+    pub fn solve_all<'a>(self) -> SolveStatus<'a> {
         match self.nodes.len() {
-            0 => Err(String::from("Graph has no nodes")),
-            1 => Err(String::from("Graph only has one node")),
-            _ => self.bare_solve(self.nodes.iter().min().unwrap().id, self.nodes.iter().max().unwrap().id)
+            0 => SolveStatus::Unsolved(self, "Graph has no nodes"),
+            1 => SolveStatus::Unsolved(self, "Graph only has one node"),
+            _ => {
+                let first_node = self.nodes.iter().min().unwrap().id;
+                let last_node = self.nodes.iter().max().unwrap().id;
+                self.bare_solve(first_node, last_node)
+            }
         }
     }
 
-    pub fn solve_given<'a>(&'a self, start: u32, end: u32) -> Result<Path<'a>, String> {
+    pub fn solve_given<'a>(self, start: u32, end: u32) -> SolveStatus<'a> {
         if start == end {
-            return Err(String::from("Start node cannot be the same as end node"));
+            return SolveStatus::Unsolved(self, "Start node cannot be the same as end node");
         }
 
         match self.nodes.len() {
-            0 => Err(String::from("Graph has no nodes")),
-            1 => Err(String::from("Graph only has one node")),
+            0 => SolveStatus::Unsolved(self, "Graph has no nodes"),
+            1 => SolveStatus::Unsolved(self, "Graph only has one node"),
             _ => {
                 if self.nodes.iter().any(|el| el.id == start) && self.nodes.iter().any(|el| el.id == end) {
                     self.bare_solve(start, end)
                 } else {
-                    Err(String::from("Could not find start/end node"))
+                    SolveStatus::Unsolved(self, "Could not find start/end node")
                 }
             }
         }
     }
 
-    fn bare_solve<'a>(&'a self, _start: u32, _end: u32) -> Result<Path<'a>, String> {
-        Ok(Path::new())
+    fn bare_solve<'a>(self, _start: u32, _end: u32) -> SolveStatus<'a> {
+        SolveStatus::Solved(Path::new(self))
     }
 }
 
@@ -114,32 +126,33 @@ impl PartialOrd for GraphNode {
 }
 
 impl<'a> Path<'a> {
-    pub fn new() -> Path<'a> {
-        Path { 
-            start: None,
-            end: None,
-            length: 0.0
+    pub fn new(graph: Graph) -> Self {
+        Self {
+            graph,
+            nodes: Vec::new()
         }
     }
 
-    pub fn get_node(& self, id: u32) -> & GraphNode {
-        assert_ne!(id, 0);
-        &self.graph.nodes[(id - 1) as usize]
+    pub fn push_node(&mut self, id: u32) {
+        let child_check = |&child_id| child_id == id;
+
+        // check if the last node contains 'id' as a child
+        if let Some(last) = self.nodes.last_mut() {
+            assert!(last.children.iter().any(&child_check));
+        }
+
+        // get the node with given 'id' from graph
+        if let Some(new_node) = self.graph.get_node(id) {
+            // if found, check if node contains the last node in the path as a child
+            assert!(new_node.children.iter().any(&child_check));
+            self.nodes.push(new_node);
+        } else {
+            panic!("Given id does not correspond to a node in the contained graph");
+        }
     }
 
-    pub fn add_node(&'a mut self, node: &'a GraphNode) {
-        if self.end != None {
-            let end_node = self.get_graph(self.end.unwrap());
-
-            assert!(end_node.children.iter().all(|child_id| *child_id != node.id));
-            assert!(node.children.iter().all(|child_id| *child_id != end_node.id));
-        }
-
-        if self.start == None {
-            self.start = Some(node.id);
-        }
-
-        self.end = Some(node.id);
+    pub fn reclaim_graph(self) -> Graph {
+        self.graph
     }
 }
 
@@ -175,15 +188,20 @@ mod tests {
     }
 
     #[test]
-    fn path_add_connected_nodes() {
-        let nodes = create_nodes();
-        let mut path = Path::new();
+    fn test_path_adding_nodes() {
+        let graph = Graph::with_nodes(create_nodes());
+        let mut path = Path::new(graph);
 
-        path.add_node(&nodes[0]);
-        path.add_node(&nodes[1]);
-        path.add_node(&nodes[3]);
-        path.add_node(&nodes[2]);
+        path.push_node(1);
+        path.push_node(2);
+        path.push_node(4);
+        path.push_node(3);
 
-        // assert
+        let mut path_iter = path.nodes.iter();
+        assert_eq!(Some(&1), path_iter.next());
+        assert_eq!(Some(&2), path_iter.next());
+        assert_eq!(Some(&4), path_iter.next());
+        assert_eq!(Some(&3), path_iter.next());
+        assert_eq!(None, path_iter.next());
     }
 }
